@@ -1,0 +1,3 @@
+[submodule "CT-NG"]
+	path = CT-NG
+	url = https://github.com/KindleModding/crosstool-ng

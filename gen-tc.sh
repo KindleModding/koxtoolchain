@@ -16,15 +16,9 @@
 ## Using CrossTool-NG (http://crosstool-ng.org/)
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-BUILD_ROOT="${CUR_DIR}/build"
-DEFAULT_GIT_REPO="https://github.com/crosstool-ng/crosstool-ng.git"
 
 Build_CT-NG() {
 	echo "[*] Building CrossTool-NG . . ."
-	ct_ng_git_repo="$1"
-	shift
-	ct_ng_commit="$1"
-	shift
 	tc_target="$1"
 	PARALLEL_JOBS=$(($(getconf _NPROCESSORS_ONLN 2> /dev/null || sysctl -n hw.ncpu 2> /dev/null || echo 0) + 1))
 	echo "[-] ct-ng git repo: ${ct_ng_git_repo}"
@@ -32,51 +26,34 @@ Build_CT-NG() {
 	echo "[-] compiling with ${PARALLEL_JOBS} parallel jobs"
 	echo "[-] toolchain target: ${tc_target}"
 
-	[ ! -d "${BUILD_ROOT}" ] && mkdir -p "${BUILD_ROOT}"
-	pushd "${BUILD_ROOT}"
-		if [ ! -d CT-NG ]; then
-			git clone "${ct_ng_git_repo}" CT-NG
-		fi
-		pushd CT-NG
-			git remote rm origin
-			git remote add origin "${ct_ng_git_repo}"
-			git fetch origin
-			git checkout "${ct_ng_commit}"
-			git clean -fxdq
-			./bootstrap
-			[ ! -d "${BUILD_ROOT}/CT_NG_BUILD" ] && mkdir -p "${BUILD_ROOT}/CT_NG_BUILD"
-			./configure --prefix="${BUILD_ROOT}/CT_NG_BUILD"
-			make -j${PARALLEL_JOBS}
-			make install
-			export PATH="${BUILD_ROOT}/CT_NG_BUILD/bin:${PATH}"
-		popd
-		# extract platform name from target tuple
-		tmp_str="${tc_target#*-}"
-		TC_BUILD_DIR="${tmp_str%%-*}"
-		[ ! -d "${TC_BUILD_DIR}" ] && mkdir -p "${TC_BUILD_DIR}"
-		ct_ng=(
-			ct-ng
-			# Tweak curl / wget options for better feedback (particularly on error).
-			curl_silent_opt=''
-			wget_silent_opt='--progress=dot:mega'
-		)
-		pushd "${TC_BUILD_DIR}"
-			"${ct_ng[@]}" distclean
+	git submodule update --init --recursive
+	pushd CT-NG
+		git clean -fxdq
+		./bootstrap
+		[ ! -d "CT_NG_BUILD" ] && mkdir -p "CT_NG_BUILD"
+		./configure --prefix="$(pwd)/CT_NG_BUILD"
+		make -j${PARALLEL_JOBS}
+		make install
+		#export PATH="$(pwd)/CT_NG_BUILD/bin:${PATH}"
+		CT_NG_PATH="$(pwd)/CT_NG_BUILD/bin/ct-ng"
+	popd
+	# extract platform name from target tuple
+	tmp_str="${tc_target#*-}"
+	TC_BUILD_DIR="build/${tmp_str%%-*}"
+	[ ! -d "${TC_BUILD_DIR}" ] && mkdir -p "${TC_BUILD_DIR}"
+	pushd "${TC_BUILD_DIR}"
+		$CT_NG_PATH distclean
 
-			unset CFLAGS CXXFLAGS LDFLAGS
-			"${ct_ng[@]}" "${tc_target}"
-			"${ct_ng[@]}" oldconfig
-			"${ct_ng[@]}" upgradeconfig
-			"${ct_ng[@]}" updatetools
-			if [ -n "${CI}" ]; then
-				sed -i 's/^CT_LOG_PROGRESS_BAR=y/CT_LOG_PROGRESS_BAR=n/' .config
-			fi
-			nice "${ct_ng[@]}" build
-			echo ""
-			echo "[INFO ]  ================================================================="
-			echo "[INFO ]  Build done. Please add $HOME/x-tools/${tc_target}/bin to your PATH."
-			echo "[INFO ]  ================================================================="
-		popd
+		unset CFLAGS CXXFLAGS LDFLAGS
+		$CT_NG_PATH "${tc_target}"
+		$CT_NG_PATH oldconfig
+		$CT_NG_PATH upgradeconfig
+		$CT_NG_PATH updatetools
+		nice $CT_NG_PATH build.$PARALLEL_JOBS
+		echo ""
+		echo "[INFO ]  ================================================================="
+		echo "[INFO ]  Build done. Please add $HOME/x-tools/${tc_target}/bin to your PATH."
+		echo "[INFO ]  ================================================================="
 	popd
 
 	echo "[INFO ]  ================================================================="
@@ -101,7 +78,6 @@ Supported platforms:
 	kobov5
 	nickel
 	remarkable
-	remarkable-aarch64
 	cervantes
 	pocketbook
 	bookeen
@@ -119,83 +95,44 @@ case $1 in
 		exit 0
 		;;
 	kobov5)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	kobov4)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	kobo)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	nickel)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	kindlehf)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	kindlepw2)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		;;
 	kindle5)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		;;
 	kindle)
 		# NOTE: Prevent libstdc++ from pulling in utimensat@GLIBC_2.6
 		export glibcxx_cv_utimensat=no
 
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		unset glibcxx_cv_utimensat
 		;;
 	remarkable)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabihf"
-		;;
-	remarkable-aarch64)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			9d4156d109d22e9b0e8958e56bbbd947cd7ce065 \
-			"aarch64-remarkable-linux-gnu"
+		Build_CT-NG "arm-${1}-linux-gnueabihf"
 		;;
 	cervantes)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		;;
 	pocketbook)
 		# NOTE: Prevent libstdc++ from pulling in utimensat@GLIBC_2.6
 		export glibcxx_cv_utimensat=no
 
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		# Then, pull InkView from the (old) official SDK...
 		# NOTE: See also https://github.com/pocketbook/SDK_6.3.0/tree/5.19/SDK-iMX6/usr/arm-obreey-linux-gnueabi/sysroot/usr/local for newer FWs...
 		chmod a+w "${HOME}/x-tools/arm-${1}-linux-gnueabi/arm-${1}-linux-gnueabi/sysroot/usr/lib"
@@ -237,10 +174,7 @@ case $1 in
 		unset glibcxx_cv_utimensat
 		;;
 	bookeen)
-		Build_CT-NG \
-			https://github.com/NiLuJe/crosstool-ng.git \
-			62fb5946719c24dd38c1f41a35a7f8bdf35462d6 \
-			"arm-${1}-linux-gnueabi"
+		Build_CT-NG "arm-${1}-linux-gnueabi"
 		;;
 	*)
 		echo "[!] $1 not supported!"
