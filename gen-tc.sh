@@ -78,6 +78,7 @@ Supported platforms:
 	kobov5
 	nickel
 	remarkable
+	remarkable-aarch64
 	cervantes
 	pocketbook
 	bookeen
@@ -124,6 +125,9 @@ case $1 in
 		;;
 	remarkable)
 		Build_CT-NG "arm-${1}-linux-gnueabihf"
+		;;
+	remarkable-aarch64)
+		Build_CT-NG "aarch64-remarkable-linux-gnu"
 		;;
 	cervantes)
 		Build_CT-NG "arm-${1}-linux-gnueabi"
