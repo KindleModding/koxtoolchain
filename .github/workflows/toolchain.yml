@@ -1,33 +1,79 @@
 name: Toolchain
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
+
   toolchain:
-    runs-on: ubuntu-20.04
+
+    runs-on: ubuntu-latest
+    container:
+      image: koreader/kobase:0.4.0-22.04
 
     strategy:
+      fail-fast: false
       matrix:
-        tc: [kindle, kindle5, kindlepw2, kindlehf, kobo, kobov4, kobov5, nickel, remarkable, cervantes, pocketbook, bookeen]
+        tc: [kindle, kindle5, kindlepw2, kindlehf, kobo, kobov4, kobov5, nickel, remarkable, remarkable-aarch64, cervantes, pocketbook, bookeen]
 
     steps:
-      - name: Check out Git repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Install Deps
-        run:  sudo apt-get install build-essential autoconf automake bison flex gawk libtool libtool-bin libncurses-dev curl file git gperf help2man texinfo unzip wget
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y bison flex gawk gperf help2man libncurses-dev libtool-bin rsync texinfo
 
-      - name: gen-tc
+      - name: Generate toolchain
         run: ./gen-tc.sh ${{ matrix.tc }}
 
-      - name: tar
+      - name: Tar artifacts
         run: tar -C ~ -czf ${{ matrix.tc }}.tar.gz x-tools
 
-      - name: Uploading artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.tc }}
           path: ${{ matrix.tc }}.tar.gz
+
+  release:
+
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    needs: toolchain
+
+    runs-on: ubuntu-latest
+
+    permissions:
+        contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if release already exists.
+          gh release list --json name,tagName,isDraft,createdAt,publishedAt | jq --color-output --exit-status --raw-output '.[] | select(.tagName == "${{ github.ref_name }}") | if .tagName == "" then halt_error end' ||
+          # And create it if it does not.
+          gh release create '${{ github.ref_name }}' --draft --notes-file .github/default_release_notes.md --title 'koxtoolchain ${{ github.ref_name }}' --verify-tag
+
+      - name: Upload release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload '${{ github.ref_name }}' artifacts/* --clobber
